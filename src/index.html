@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Codex Usage Widget</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="widget" class="widget">
+      <header class="header">
+        <div>
+          <div class="eyebrow">Codex</div>
+          <h1>남은 사용량</h1>
+        </div>
+        <button id="refresh" class="icon-button" type="button" title="새로고침">↻</button>
+      </header>
+
+      <section class="meters" aria-live="polite">
+        <article class="meter" data-tone="primary">
+          <div class="meter-top">
+            <span>5시간</span>
+            <strong id="primaryRemaining">--%</strong>
+          </div>
+          <div class="track">
+            <div id="primaryBar" class="bar"></div>
+          </div>
+          <time id="primaryReset">리셋 확인 중</time>
+        </article>
+
+        <article class="meter" data-tone="secondary">
+          <div class="meter-top">
+            <span>1주</span>
+            <strong id="secondaryRemaining">--%</strong>
+          </div>
+          <div class="track">
+            <div id="secondaryBar" class="bar"></div>
+          </div>
+          <time id="secondaryReset">리셋 확인 중</time>
+        </article>
+      </section>
+
+      <footer class="footer">
+        <span id="status">연결 중</span>
+        <span id="updated">--:--</span>
+      </footer>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>
