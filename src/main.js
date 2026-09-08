@@ -10,7 +10,6 @@ const DEFAULT_SETTINGS = {
 };
 
 let mainWindow = null;
-let compact = false;
 let latestPayload = null;
 let refreshTimer = null;
 let rpcClient = null;
@@ -219,7 +218,7 @@ function createWindow() {
   settings = loadSettings();
 
   mainWindow = new BrowserWindow({
-    width: 326,
+    width: 382,
     height: 220,
     minWidth: 230,
     minHeight: 104,
@@ -387,14 +386,6 @@ function sendSettingsUpdate() {
   }
 }
 
-function toggleCompact() {
-  compact = !compact;
-  if (mainWindow) {
-    mainWindow.setSize(compact ? 230 : 326, compact ? 104 : 220);
-    mainWindow.webContents.send("widget:compact", compact);
-  }
-}
-
 function clamp(value, min, max) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return min;
@@ -424,7 +415,6 @@ ipcMain.handle("app:hide", () => {
   }
 });
 ipcMain.handle("app:quit", () => app.quit());
-ipcMain.handle("widget:toggleCompact", () => toggleCompact());
 ipcMain.handle("settings:read", () => settings);
 ipcMain.handle("settings:write", (_event, nextSettings) => saveSettings(nextSettings));
 ipcMain.on("window:moveBy", (_event, deltaX, deltaY) => {

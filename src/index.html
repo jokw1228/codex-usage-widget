@@ -8,70 +8,78 @@
   </head>
   <body>
     <main id="widget" class="widget">
-      <header class="header">
-        <div class="title-block">
-          <div class="eyebrow">
-            <span>Codex</span>
-            <span id="status" class="status-pill">연결 중</span>
-          </div>
-          <h1>남은 사용량</h1>
-        </div>
-        <div class="actions">
-          <span id="updated" class="updated-time">--:--</span>
-          <button id="refresh" class="icon-button" type="button" title="새로고침">↻</button>
-          <button id="close" class="icon-button close-button" type="button" title="닫기">×</button>
-        </div>
-      </header>
+      <div class="card-inner">
+        <section class="card-face card-front" aria-label="사용량">
+          <header class="header">
+            <div class="title-block">
+              <div class="eyebrow">
+                <span>Codex</span>
+                <span id="status" class="status-pill">연결 중</span>
+              </div>
+              <h1>남은 사용량</h1>
+            </div>
+            <div class="actions">
+              <span id="updated" class="updated-time">--:--</span>
+              <button id="refresh" class="icon-button" type="button" title="새로고침">↻</button>
+              <button id="options" class="icon-button" type="button" title="옵션">⚙</button>
+              <button id="close" class="icon-button close-button" type="button" title="닫기">×</button>
+            </div>
+          </header>
 
-      <section id="errorPanel" class="error-panel" aria-live="polite" hidden>
-        <strong>Codex 연결 필요</strong>
-        <p>Codex Desktop 또는 Codex CLI를 설치하고 ChatGPT 계정으로 로그인해 주세요.</p>
-        <small id="errorDetail"></small>
-      </section>
+          <section id="errorPanel" class="error-panel" aria-live="polite" hidden>
+            <strong>Codex 연결 필요</strong>
+            <p>Codex Desktop 또는 Codex CLI를 설치하고 ChatGPT 계정으로 로그인해 주세요.</p>
+            <small id="errorDetail"></small>
+          </section>
 
-      <section id="meters" class="meters" aria-live="polite">
-        <article class="meter" data-tone="primary">
-          <div class="meter-top">
-            <span>5시간</span>
-            <strong id="primaryRemaining">--%</strong>
-          </div>
-          <div class="track">
-            <div id="primaryBar" class="bar"></div>
-          </div>
-          <time id="primaryReset">리셋 확인 중</time>
-        </article>
+          <section id="meters" class="meters" aria-live="polite">
+            <article class="meter" data-tone="primary">
+              <div class="meter-top">
+                <span>5시간</span>
+                <strong id="primaryRemaining">--%</strong>
+              </div>
+              <div class="track">
+                <div id="primaryBar" class="bar"></div>
+              </div>
+              <time id="primaryReset">리셋 확인 중</time>
+            </article>
 
-        <article class="meter" data-tone="secondary">
-          <div class="meter-top">
-            <span>1주</span>
-            <strong id="secondaryRemaining">--%</strong>
-          </div>
-          <div class="track">
-            <div id="secondaryBar" class="bar"></div>
-          </div>
-          <time id="secondaryReset">리셋 확인 중</time>
-        </article>
-      </section>
+            <article class="meter" data-tone="secondary">
+              <div class="meter-top">
+                <span>1주</span>
+                <strong id="secondaryRemaining">--%</strong>
+              </div>
+              <div class="track">
+                <div id="secondaryBar" class="bar"></div>
+              </div>
+              <time id="secondaryReset">리셋 확인 중</time>
+            </article>
+          </section>
+        </section>
 
-      <section id="settingsPanel" class="settings-panel" aria-label="옵션" hidden>
-        <div class="settings-header">
-          <strong>옵션</strong>
-          <button id="settingsClose" class="small-button" type="button" title="닫기">×</button>
-        </div>
-        <label class="range-row" for="opacityRange">
-          <span>투명도</span>
-          <output id="opacityValue" for="opacityRange">95%</output>
-        </label>
-        <input id="opacityRange" type="range" min="45" max="100" value="95" />
-      </section>
+        <section class="card-face card-back" aria-label="옵션">
+          <header class="header">
+            <div class="title-block">
+              <div class="eyebrow">
+                <span>Settings</span>
+              </div>
+              <h1>옵션</h1>
+            </div>
+            <div class="actions">
+              <button id="settingsClose" class="icon-button" type="button" title="돌아가기">↩</button>
+              <button id="settingsQuit" class="icon-button close-button" type="button" title="닫기">×</button>
+            </div>
+          </header>
 
-      <nav id="contextMenu" class="context-menu" aria-label="위젯 메뉴" hidden>
-        <button type="button" data-action="refresh">새로고침</button>
-        <button id="compactMenuLabel" type="button" data-action="compact">컴팩트 모드</button>
-        <button type="button" data-action="settings">옵션</button>
-        <hr />
-        <button type="button" data-action="quit">종료</button>
-      </nav>
+          <div class="settings-content">
+            <label class="range-row" for="opacityRange">
+              <span>투명도</span>
+              <output id="opacityValue" for="opacityRange">95%</output>
+            </label>
+            <input id="opacityRange" type="range" min="45" max="100" value="95" />
+          </div>
+        </section>
+      </div>
     </main>
 
     <script src="./renderer.js"></script>

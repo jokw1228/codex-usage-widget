@@ -28,17 +28,42 @@ body {
 }
 
 .widget {
-  position: relative;
   width: calc(100vw - 12px);
   height: calc(100vh - 12px);
+  color: #f7f8fb;
+  perspective: 900px;
+}
+
+.card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.widget.show-settings .card-inner {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: start;
   padding: 16px;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   background:
     linear-gradient(145deg, rgba(27, 32, 43, 0.94), rgba(10, 12, 17, 0.9)),
     rgba(12, 15, 20, 0.92);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
-  color: #f7f8fb;
+  backface-visibility: hidden;
+}
+
+.card-back {
+  transform: rotateY(180deg);
 }
 
 .header,
@@ -48,7 +73,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .header {
@@ -56,6 +81,7 @@ body {
 }
 
 .title-block {
+  flex: 1;
   min-width: 0;
 }
 
@@ -87,6 +113,7 @@ h1 {
   font-size: 18px;
   line-height: 1.15;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .actions {
@@ -95,7 +122,7 @@ h1 {
 }
 
 .updated-time {
-  width: 74px;
+  width: 62px;
   color: #93a4b5;
   font-size: 10px;
   line-height: 1.2;
@@ -104,13 +131,13 @@ h1 {
 }
 
 .icon-button {
-  width: 31px;
-  height: 31px;
+  width: 30px;
+  height: 30px;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.07);
   color: #e7eef7;
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }
@@ -209,70 +236,12 @@ time {
   line-height: 1.2;
 }
 
-.settings-panel {
-  position: absolute;
-  top: 62px;
-  right: 15px;
-  z-index: 3;
+.settings-content {
   display: grid;
-  width: 174px;
-  max-height: 138px;
-  gap: 11px;
-  padding: 12px;
-  overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  background: rgba(16, 20, 28, 0.97);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
+  gap: 13px;
+  margin-top: 22px;
 }
 
-.context-menu {
-  position: absolute;
-  z-index: 4;
-  display: grid;
-  width: 154px;
-  padding: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  background: rgba(18, 20, 25, 0.98);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
-}
-
-.context-menu[hidden] {
-  display: none;
-}
-
-.context-menu button {
-  width: 100%;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #eef3f8;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.2;
-  text-align: left;
-  cursor: pointer;
-}
-
-.context-menu button:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.context-menu hr {
-  width: 100%;
-  height: 1px;
-  margin: 5px 0;
-  border: 0;
-  background: rgba(255, 255, 255, 0.11);
-}
-
-.settings-panel[hidden] {
-  display: none;
-}
-
-.settings-header,
 .range-row {
   display: flex;
   align-items: center;
@@ -280,40 +249,20 @@ time {
   gap: 10px;
 }
 
-.settings-header strong,
 .range-row span,
 .range-row output {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.2;
 }
 
-.settings-header strong {
-  color: #f7f8fb;
-}
-
 .range-row span {
-  color: #cdd7e2;
+  color: #dce6f0;
+  font-weight: 650;
 }
 
 .range-row output {
   color: #93a4b5;
   font-variant-numeric: tabular-nums;
-}
-
-.small-button {
-  width: 24px;
-  height: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #dce6f0;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.small-button:hover {
-  background: rgba(255, 255, 255, 0.12);
 }
 
 input[type="range"] {
@@ -325,33 +274,8 @@ input[type="range"] {
   animation: spin 900ms linear infinite;
 }
 
-.widget[data-status="error"] {
+.widget[data-status="error"] .card-front {
   border-color: rgba(255, 99, 99, 0.45);
-}
-
-.compact {
-  padding: 13px 14px;
-}
-
-.compact .header {
-  margin-bottom: 8px;
-}
-
-.compact h1 {
-  font-size: 15px;
-}
-
-.compact .eyebrow,
-.compact time,
-.compact .updated-time,
-.compact .close-button,
-.compact .settings-panel,
-.compact .meter[data-tone="secondary"] {
-  display: none;
-}
-
-.compact .meter-top strong {
-  font-size: 24px;
 }
 
 @keyframes spin {
