@@ -33,6 +33,7 @@ GitHub의 **Releases**에서 최신 `codex-usage-widget-*-portable-x64.exe` 파�
 - HTML/CSS/JavaScript: 렌더러 UI
 - electron-builder: Windows portable exe 패키징
 - GitHub Releases: 실행 파일 배포
+- ImageGen: 앱 아이콘 초안 생성
 
 ## 동작 방식
 
@@ -65,7 +66,9 @@ Windows portable exe 생성:
 npm run package:win
 ```
 
-빌드 결과는 `release/` 폴더에 생성됩니다. 이 폴더는 Git에 커밋하지 않고, 배포 파일은 GitHub Releases에 업로드합니다.
+빌드 전에 `assets/app-icon.png`에서 Windows용 `assets/app-icon.ico`를 생성합니다.
+
+빌드 결과는 `release/` 폴더에 생성됩니다. 패키징 스크립트는 중간 산출물을 정리하고 portable exe만 남깁니다. 이 폴더는 Git에 커밋하지 않고, 배포 파일은 GitHub Releases에 업로드합니다.
 
 ## 라이선스
 
