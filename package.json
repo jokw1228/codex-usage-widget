@@ -1,6 +1,6 @@
 {
   "name": "codex-usage-widget",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Always-on-top Codex usage widget for Windows.",
   "author": "Kangwoo Cho",

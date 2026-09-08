@@ -28,6 +28,7 @@ body {
 }
 
 .widget {
+  position: relative;
   width: calc(100vw - 12px);
   height: calc(100vh - 12px);
   padding: 16px;
@@ -38,7 +39,6 @@ body {
     rgba(12, 15, 20, 0.92);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
   color: #f7f8fb;
-  -webkit-app-region: drag;
 }
 
 .header,
@@ -91,7 +91,7 @@ h1 {
 
 .actions {
   flex-shrink: 0;
-  -webkit-app-region: no-drag;
+  gap: 8px;
 }
 
 .updated-time {
@@ -113,11 +113,20 @@ h1 {
   font-size: 17px;
   line-height: 1;
   cursor: pointer;
-  -webkit-app-region: no-drag;
 }
 
 .icon-button:hover {
   background: rgba(255, 255, 255, 0.13);
+}
+
+.close-button {
+  color: #f6d7dc;
+}
+
+.close-button:hover {
+  border-color: rgba(251, 113, 133, 0.38);
+  background: rgba(251, 113, 133, 0.14);
+  color: #ffffff;
 }
 
 .meters {
@@ -200,7 +209,119 @@ time {
   line-height: 1.2;
 }
 
-.widget[data-status="loading"] .icon-button {
+.settings-panel {
+  position: absolute;
+  top: 62px;
+  right: 15px;
+  z-index: 3;
+  display: grid;
+  width: 174px;
+  max-height: 138px;
+  gap: 11px;
+  padding: 12px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(16, 20, 28, 0.97);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
+}
+
+.context-menu {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  width: 154px;
+  padding: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(18, 20, 25, 0.98);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
+}
+
+.context-menu[hidden] {
+  display: none;
+}
+
+.context-menu button {
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #eef3f8;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.context-menu hr {
+  width: 100%;
+  height: 1px;
+  margin: 5px 0;
+  border: 0;
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.settings-panel[hidden] {
+  display: none;
+}
+
+.settings-header,
+.range-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-header strong,
+.range-row span,
+.range-row output {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.settings-header strong {
+  color: #f7f8fb;
+}
+
+.range-row span {
+  color: #cdd7e2;
+}
+
+.range-row output {
+  color: #93a4b5;
+  font-variant-numeric: tabular-nums;
+}
+
+.small-button {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #dce6f0;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.small-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: #6ee7b7;
+}
+
+.widget[data-status="loading"] #refresh {
   animation: spin 900ms linear infinite;
 }
 
@@ -223,6 +344,8 @@ time {
 .compact .eyebrow,
 .compact time,
 .compact .updated-time,
+.compact .close-button,
+.compact .settings-panel,
 .compact .meter[data-tone="secondary"] {
   display: none;
 }

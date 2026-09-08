@@ -1,15 +1,20 @@
-const { app, BrowserWindow, Menu, globalShortcut, ipcMain } = require("electron");
+const { app, BrowserWindow, globalShortcut, ipcMain } = require("electron");
 const { execFileSync, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
 const REFRESH_MS = 60_000;
+const APP_NAME = "Codex Usage Widget";
+const DEFAULT_SETTINGS = {
+  opacity: 0.95
+};
 
 let mainWindow = null;
 let compact = false;
 let latestPayload = null;
 let refreshTimer = null;
 let rpcClient = null;
+let settings = DEFAULT_SETTINGS;
 
 class CodexRpcClient {
   constructor() {
@@ -211,8 +216,10 @@ function isShellScript(command) {
 }
 
 function createWindow() {
+  settings = loadSettings();
+
   mainWindow = new BrowserWindow({
-    width: 300,
+    width: 326,
     height: 220,
     minWidth: 230,
     minHeight: 104,
@@ -232,20 +239,13 @@ function createWindow() {
   });
 
   mainWindow.setAlwaysOnTop(true, "screen-saver");
+  mainWindow.setOpacity(settings.opacity);
   mainWindow.loadFile(path.join(__dirname, "index.html"));
   mainWindow.once("ready-to-show", () => {
     positionWindow();
     mainWindow.showInactive();
+    sendSettingsUpdate();
     refreshUsage();
-  });
-
-  mainWindow.webContents.on("context-menu", () => {
-    Menu.buildFromTemplate([
-      { label: "Refresh", click: () => refreshUsage() },
-      { label: compact ? "Expanded" : "Compact", click: () => toggleCompact() },
-      { type: "separator" },
-      { label: "Quit", click: () => app.quit() }
-    ]).popup({ window: mainWindow });
   });
 }
 
@@ -337,13 +337,71 @@ function sendUsageUpdate() {
   }
 }
 
+function loadSettings() {
+  const settingsPath = getSettingsPath();
+
+  try {
+    if (!fs.existsSync(settingsPath)) {
+      return { ...DEFAULT_SETTINGS };
+    }
+
+    return normalizeSettings(JSON.parse(fs.readFileSync(settingsPath, "utf8")));
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettings(nextSettings) {
+  settings = normalizeSettings(nextSettings);
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setOpacity(settings.opacity);
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(getSettingsPath()), { recursive: true });
+    fs.writeFileSync(getSettingsPath(), `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  } catch {
+    // Settings are non-critical; keep the live value even if persistence fails.
+  }
+
+  sendSettingsUpdate();
+  return settings;
+}
+
+function normalizeSettings(value) {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...(value || {}),
+    opacity: clamp(value?.opacity ?? DEFAULT_SETTINGS.opacity, 0.45, 1)
+  };
+}
+
+function getSettingsPath() {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+
+function sendSettingsUpdate() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("settings:update", settings);
+  }
+}
+
 function toggleCompact() {
   compact = !compact;
   if (mainWindow) {
-    mainWindow.setSize(compact ? 230 : 300, compact ? 104 : 220);
+    mainWindow.setSize(compact ? 230 : 326, compact ? 104 : 220);
     mainWindow.webContents.send("widget:compact", compact);
   }
 }
+
+function clamp(value, min, max) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return min;
+  return Math.min(max, Math.max(min, numericValue));
+}
+
+app.setName(APP_NAME);
 
 app.whenReady().then(() => {
   createWindow();
@@ -367,6 +425,14 @@ ipcMain.handle("app:hide", () => {
 });
 ipcMain.handle("app:quit", () => app.quit());
 ipcMain.handle("widget:toggleCompact", () => toggleCompact());
+ipcMain.handle("settings:read", () => settings);
+ipcMain.handle("settings:write", (_event, nextSettings) => saveSettings(nextSettings));
+ipcMain.on("window:moveBy", (_event, deltaX, deltaY) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const [x, y] = mainWindow.getPosition();
+  mainWindow.setPosition(x + Math.round(deltaX), y + Math.round(deltaY), false);
+});
 
 app.on("before-quit", () => {
   if (refreshTimer) {

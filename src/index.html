@@ -19,6 +19,7 @@
         <div class="actions">
           <span id="updated" class="updated-time">--:--</span>
           <button id="refresh" class="icon-button" type="button" title="새로고침">↻</button>
+          <button id="close" class="icon-button close-button" type="button" title="닫기">×</button>
         </div>
       </header>
 
@@ -51,6 +52,26 @@
           <time id="secondaryReset">리셋 확인 중</time>
         </article>
       </section>
+
+      <section id="settingsPanel" class="settings-panel" aria-label="옵션" hidden>
+        <div class="settings-header">
+          <strong>옵션</strong>
+          <button id="settingsClose" class="small-button" type="button" title="닫기">×</button>
+        </div>
+        <label class="range-row" for="opacityRange">
+          <span>투명도</span>
+          <output id="opacityValue" for="opacityRange">95%</output>
+        </label>
+        <input id="opacityRange" type="range" min="45" max="100" value="95" />
+      </section>
+
+      <nav id="contextMenu" class="context-menu" aria-label="위젯 메뉴" hidden>
+        <button type="button" data-action="refresh">새로고침</button>
+        <button id="compactMenuLabel" type="button" data-action="compact">컴팩트 모드</button>
+        <button type="button" data-action="settings">옵션</button>
+        <hr />
+        <button type="button" data-action="quit">종료</button>
+      </nav>
     </main>
 
     <script src="./renderer.js"></script>
