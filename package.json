@@ -1,6 +1,6 @@
 {
   "name": "codex-usage-widget",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Always-on-top Codex usage widget for Windows.",
   "author": "Kangwoo Cho",
@@ -16,7 +16,7 @@
     "appId": "dev.local.codexUsageWidget",
     "productName": "Codex Usage Widget",
     "asar": true,
-    "artifactName": "${productName}-${version}-portable-${arch}.${ext}",
+    "artifactName": "codex-usage-widget-${version}-portable-${arch}.${ext}",
     "directories": {
       "output": "release"
     },

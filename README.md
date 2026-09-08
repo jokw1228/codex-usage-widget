@@ -14,7 +14,7 @@ Codex 사용량을 Windows 화면 위에 작게 띄워두는 투명/항상 위 �
 
 ## 다운로드
 
-GitHub의 **Releases**에서 최신 `Codex Usage Widget-*-portable-x64.exe` 파일을 내려받아 실행하면 됩니다.
+GitHub의 **Releases**에서 최신 `codex-usage-widget-*-portable-x64.exe` 파일을 내려받아 실행하면 됩니다.
 
 > 이 앱은 Codex 자체를 포함하지 않습니다. 사용하려면 먼저 Codex Desktop 또는 Codex CLI가 설치되어 있고, 본인의 ChatGPT 계정으로 로그인되어 있어야 합니다.
 
