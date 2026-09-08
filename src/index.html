@@ -9,14 +9,26 @@
   <body>
     <main id="widget" class="widget">
       <header class="header">
-        <div>
-          <div class="eyebrow">Codex</div>
+        <div class="title-block">
+          <div class="eyebrow">
+            <span>Codex</span>
+            <span id="status" class="status-pill">연결 중</span>
+          </div>
           <h1>남은 사용량</h1>
         </div>
-        <button id="refresh" class="icon-button" type="button" title="새로고침">↻</button>
+        <div class="actions">
+          <span id="updated" class="updated-time">--:--</span>
+          <button id="refresh" class="icon-button" type="button" title="새로고침">↻</button>
+        </div>
       </header>
 
-      <section class="meters" aria-live="polite">
+      <section id="errorPanel" class="error-panel" aria-live="polite" hidden>
+        <strong>Codex 연결 필요</strong>
+        <p>Codex Desktop 또는 Codex CLI를 설치하고 ChatGPT 계정으로 로그인해 주세요.</p>
+        <small id="errorDetail"></small>
+      </section>
+
+      <section id="meters" class="meters" aria-live="polite">
         <article class="meter" data-tone="primary">
           <div class="meter-top">
             <span>5시간</span>
@@ -39,11 +51,6 @@
           <time id="secondaryReset">리셋 확인 중</time>
         </article>
       </section>
-
-      <footer class="footer">
-        <span id="status">연결 중</span>
-        <span id="updated">--:--</span>
-      </footer>
     </main>
 
     <script src="./renderer.js"></script>

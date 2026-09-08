@@ -94,7 +94,10 @@ class CodexRpcClient {
         continue;
       }
 
-      if (!Object.prototype.hasOwnProperty.call(message, "id")) continue;
+      if (!Object.prototype.hasOwnProperty.call(message, "id")) {
+        this.onNotification(message);
+        continue;
+      }
 
       const pending = this.pending.get(message.id);
       if (!pending) continue;
@@ -118,6 +121,18 @@ class CodexRpcClient {
       };
       sendUsageUpdate();
     }
+  }
+
+  onNotification(message) {
+    if (message.method !== "account/rateLimits/updated") return;
+
+    latestPayload = {
+      status: "ready",
+      data: mergeRateLimitPayload(latestPayload?.data, message.params),
+      source: "event",
+      updatedAt: Date.now()
+    };
+    sendUsageUpdate();
   }
 
   onExit() {
@@ -188,7 +203,7 @@ function resolveCodexCommand() {
 
   if (existing[0]) return existing[0];
 
-  throw new Error("Codex CLI를 찾을 수 없습니다. ChatGPT/Codex Desktop 또는 Codex CLI를 설치하고 로그인해 주세요.");
+  throw new Error("Codex CLI를 찾을 수 없습니다.");
 }
 
 function isShellScript(command) {
@@ -237,10 +252,11 @@ function positionWindow() {
   mainWindow.setPosition(24, 24, false);
 }
 
-async function refreshUsage() {
+async function refreshUsage(source = "poll") {
   latestPayload = {
     status: "loading",
     data: latestPayload && latestPayload.data ? latestPayload.data : null,
+    source,
     updatedAt: Date.now()
   };
   sendUsageUpdate();
@@ -253,6 +269,7 @@ async function refreshUsage() {
     latestPayload = {
       status: "ready",
       data,
+      source,
       updatedAt: Date.now()
     };
   } catch (error) {
@@ -263,11 +280,54 @@ async function refreshUsage() {
     latestPayload = {
       status: "error",
       error: error.message,
+      source,
       updatedAt: Date.now()
     };
   }
 
   sendUsageUpdate();
+}
+
+function mergeRateLimitPayload(previous, update) {
+  if (!previous) return update;
+  if (!update) return previous;
+
+  return {
+    ...previous,
+    ...update,
+    rateLimits: mergeRateLimitSnapshot(previous.rateLimits, update.rateLimits),
+    rateLimitsByLimitId: mergeRateLimitsById(
+      previous.rateLimitsByLimitId,
+      update.rateLimitsByLimitId
+    )
+  };
+}
+
+function mergeRateLimitsById(previous, update) {
+  if (!previous) return update;
+  if (!update) return previous;
+
+  const merged = { ...previous };
+  for (const [limitId, snapshot] of Object.entries(update)) {
+    merged[limitId] = mergeRateLimitSnapshot(previous[limitId], snapshot);
+  }
+  return merged;
+}
+
+function mergeRateLimitSnapshot(previous, update) {
+  if (!previous) return update;
+  if (!update) return previous;
+
+  return {
+    ...previous,
+    ...update,
+    primary: update.primary ? { ...previous.primary, ...update.primary } : previous.primary,
+    secondary: update.secondary ? { ...previous.secondary, ...update.secondary } : previous.secondary,
+    credits: update.credits ? { ...previous.credits, ...update.credits } : previous.credits,
+    individualLimit: update.individualLimit
+      ? { ...previous.individualLimit, ...update.individualLimit }
+      : previous.individualLimit
+  };
 }
 
 function sendUsageUpdate() {

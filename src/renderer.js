@@ -1,5 +1,8 @@
 const widget = document.getElementById("widget");
 const refreshButton = document.getElementById("refresh");
+const meters = document.getElementById("meters");
+const errorPanel = document.getElementById("errorPanel");
+const errorDetail = document.getElementById("errorDetail");
 const primaryRemaining = document.getElementById("primaryRemaining");
 const secondaryRemaining = document.getElementById("secondaryRemaining");
 const primaryBar = document.getElementById("primaryBar");
@@ -27,16 +30,17 @@ window.codexUsage.onUpdate((payload) => {
   if (!payload) return;
 
   widget.dataset.status = payload.status;
-  updatedEl.textContent = formatTime(payload.updatedAt);
+  updatedEl.textContent = formatUpdated(payload.updatedAt, payload.source);
 
   if (payload.status === "loading") {
     statusEl.textContent = "갱신 중";
+    showMeters();
     return;
   }
 
   if (payload.status === "error") {
-    statusEl.textContent = "연결 실패";
-    updatedEl.textContent = shortenError(payload.error);
+    statusEl.textContent = "연결 필요";
+    showError(payload.error);
     return;
   }
 
@@ -47,7 +51,19 @@ window.codexUsage.onUpdate((payload) => {
   renderWindow(primary, primaryRemaining, primaryBar, primaryReset, "5시간");
   renderWindow(secondary, secondaryRemaining, secondaryBar, secondaryReset, "1주");
   statusEl.textContent = limits?.planType ? limits.planType.toUpperCase() : "READY";
+  showMeters();
 });
+
+function showMeters() {
+  meters.hidden = false;
+  errorPanel.hidden = true;
+}
+
+function showError(error) {
+  meters.hidden = true;
+  errorPanel.hidden = false;
+  errorDetail.textContent = error ? `세부 오류: ${shortenError(error)}` : "";
+}
 
 function renderWindow(windowData, labelEl, barEl, resetEl, label) {
   if (!windowData) {
@@ -90,6 +106,11 @@ function formatTime(timestamp) {
     second: "2-digit",
     hour12: false
   }).format(new Date(timestamp));
+}
+
+function formatUpdated(timestamp, source) {
+  const prefix = source === "event" ? "이벤트" : "갱신";
+  return `${prefix} ${formatTime(timestamp)}`;
 }
 
 function shortenError(error) {

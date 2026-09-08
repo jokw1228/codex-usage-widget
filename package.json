@@ -1,6 +1,6 @@
 {
   "name": "codex-usage-widget",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Always-on-top Codex usage widget for Windows.",
   "author": "Kangwoo Cho",
@@ -10,27 +10,24 @@
     "start": "electron .",
     "dev": "electron .",
     "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js",
-    "package:win": "electron-builder --win portable --x64",
-    "dist:win": "electron-builder --win nsis --x64"
+    "package:win": "electron-builder --win portable --x64"
   },
   "build": {
     "appId": "dev.local.codexUsageWidget",
     "productName": "Codex Usage Widget",
     "asar": true,
+    "artifactName": "${productName}-${version}-portable-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "src/**/*",
       "package.json"
     ],
     "win": {
       "target": [
-        "portable",
-        "nsis"
+        "portable"
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true
     },
     "publish": null
   },

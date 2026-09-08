@@ -1,51 +1,72 @@
 # Codex Usage Widget
 
-Tiny always-on-top Windows widget that reads Codex usage from the local Codex app-server and displays the 5-hour and weekly remaining percentages.
+Codex 사용량을 Windows 화면 위에 작게 띄워두는 투명/항상 위 위젯입니다.
 
-## Run
+![platform](https://img.shields.io/badge/platform-Windows-2563eb)
+![license](https://img.shields.io/badge/license-MIT-22c55e)
+
+## 무엇을 하나요?
+
+- Codex 5시간 사용량과 주간 사용량의 남은 비율을 표시합니다.
+- 프레임 없는 작은 위젯으로 화면 위에 계속 띄울 수 있습니다.
+- Codex가 설치되어 있지 않거나 로그인되어 있지 않으면 설치/로그인 안내를 보여줍니다.
+- 1분마다 자동 갱신하고, Codex 로컬 app-server 이벤트가 오면 즉시 반영합니다.
+
+## 다운로드
+
+GitHub의 **Releases**에서 최신 `Codex Usage Widget-*-portable-x64.exe` 파일을 내려받아 실행하면 됩니다.
+
+> 이 앱은 Codex 자체를 포함하지 않습니다. 사용하려면 먼저 Codex Desktop 또는 Codex CLI가 설치되어 있고, 본인의 ChatGPT 계정으로 로그인되어 있어야 합니다.
+
+## 사용법
+
+- 위젯 이동: 카드 아무 곳이나 드래그
+- 새로고침: 우측 상단 버튼
+- 메뉴: 위젯 우클릭
+- 보이기/숨기기: `Ctrl+Alt+U`
+- 숨기기: `Esc`
+
+## 기술 스택
+
+- Electron: Windows 데스크톱 위젯 UI
+- Node.js: Codex 로컬 app-server 프로세스 제어
+- HTML/CSS/JavaScript: 렌더러 UI
+- electron-builder: Windows portable exe 패키징
+- GitHub Releases: 실행 파일 배포
+
+## 동작 방식
+
+이 앱은 공개 OpenAI API가 아니라 로컬 Codex app-server를 사용합니다.
+
+1. `codex app-server --stdio`를 실행합니다.
+2. `account/rateLimits/read`로 사용량 스냅샷을 가져옵니다.
+3. `account/rateLimits/updated` 이벤트가 오면 화면을 갱신합니다.
+4. 이벤트가 없더라도 60초마다 polling으로 다시 확인합니다.
+
+오른쪽 상단의 `갱신 HH:MM:SS`는 마지막으로 사용량 데이터를 가져오거나 이벤트를 받은 시간입니다.
+
+## 개발
 
 ```powershell
 npm install
 npm start
 ```
 
-## Package
+검증:
 
-Create a portable Windows executable:
+```powershell
+npm run check
+npm audit --omit=optional
+```
+
+Windows portable exe 생성:
 
 ```powershell
 npm run package:win
 ```
 
-Create a Windows installer:
+빌드 결과는 `release/` 폴더에 생성됩니다. 이 폴더는 Git에 커밋하지 않고, 배포 파일은 GitHub Releases에 업로드합니다.
 
-```powershell
-npm run dist:win
-```
+## 라이선스
 
-Outputs are written to `dist/`.
-
-## Controls
-
-- Drag the widget from anywhere on the card.
-- Right-click for Refresh, Compact, and Quit.
-- Press `Esc` while focused to hide the widget.
-- Use `Ctrl+Alt+U` to show or hide it globally.
-
-## Notes
-
-This uses the local Codex app-server protocol (`codex app-server --stdio`) and the `account/rateLimits/read` method. It is a local desktop helper, not a public OpenAI API integration.
-
-For other users, the widget reads whichever ChatGPT account is already signed in through their local Codex client. It does not collect, proxy, or store ChatGPT passwords or session tokens.
-
-## Distribution Model
-
-This app intentionally does not implement its own ChatGPT login flow.
-
-Expected user setup:
-
-1. Install ChatGPT/Codex Desktop or Codex CLI.
-2. Sign in to Codex with their own ChatGPT account.
-3. Run Codex Usage Widget.
-
-The widget then asks the local Codex app-server for the signed-in account's usage limits. If OpenAI changes or removes that local protocol, this app may need an update.
+MIT
