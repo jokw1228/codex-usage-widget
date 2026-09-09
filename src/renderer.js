@@ -17,8 +17,9 @@ const statusEl = document.getElementById("status");
 const updatedEl = document.getElementById("updated");
 const opacityRange = document.getElementById("opacityRange");
 const opacityValue = document.getElementById("opacityValue");
-
-let dragPosition = null;
+const resetSettingsButton = document.getElementById("resetSettings");
+const resizeHandles = document.querySelectorAll("[data-resize]");
+let activeInteraction = null;
 
 refreshButton.addEventListener("click", () => {
   window.codexUsage.refresh();
@@ -46,36 +47,41 @@ opacityRange.addEventListener("input", () => {
   window.codexUsage.writeSettings({ opacity }).catch(() => {});
 });
 
-window.addEventListener("mousedown", (event) => {
+resetSettingsButton.addEventListener("click", () => {
+  window.codexUsage.resetSettings().then(renderSettings).catch(() => {});
+});
+
+for (const handle of resizeHandles) {
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    startPointerInteraction(event, "resize", handle.dataset.resize);
+  });
+}
+
+window.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || isInteractiveTarget(event.target)) return;
 
-  dragPosition = {
-    screenX: event.screenX,
-    screenY: event.screenY
-  };
+  event.preventDefault();
+  startPointerInteraction(event, "drag");
 });
 
-window.addEventListener("mousemove", (event) => {
-  if (!dragPosition) return;
+window.addEventListener("pointermove", (event) => {
+  if (!activeInteraction || activeInteraction.pointerId !== event.pointerId) return;
 
-  const deltaX = event.screenX - dragPosition.screenX;
-  const deltaY = event.screenY - dragPosition.screenY;
-  if (deltaX === 0 && deltaY === 0) return;
-
-  dragPosition = {
-    screenX: event.screenX,
-    screenY: event.screenY
-  };
-  window.codexUsage.moveBy(deltaX, deltaY);
+  event.preventDefault();
+  if (activeInteraction.type === "resize") {
+    window.codexUsage.resizeMove();
+  } else {
+    window.codexUsage.dragMove();
+  }
 });
 
-window.addEventListener("mouseup", () => {
-  dragPosition = null;
-});
-
-window.addEventListener("blur", () => {
-  dragPosition = null;
-});
+window.addEventListener("pointerup", endPointerInteraction);
+window.addEventListener("pointercancel", endPointerInteraction);
+window.addEventListener("blur", endPointerInteraction);
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
@@ -201,8 +207,61 @@ function renderSettings(settings) {
   opacityValue.textContent = `${percent}%`;
 }
 
+function startPointerInteraction(event, type, direction) {
+  if (activeInteraction) {
+    endPointerInteraction();
+  }
+
+  const captureTarget = event.currentTarget || event.target;
+  activeInteraction = {
+    pointerId: event.pointerId,
+    type,
+    captureTarget
+  };
+
+  try {
+    captureTarget.setPointerCapture?.(event.pointerId);
+  } catch {
+    // Some elements may not support capture after event retargeting.
+  }
+
+  if (type === "resize") {
+    window.codexUsage.startResize(direction);
+  } else {
+    window.codexUsage.startDrag();
+  }
+}
+
+function endPointerInteraction(event) {
+  if (
+    event &&
+    Number.isFinite(event.pointerId) &&
+    activeInteraction?.pointerId !== event.pointerId
+  ) {
+    return;
+  }
+  if (!activeInteraction) return;
+
+  const endedInteraction = activeInteraction;
+
+  if (endedInteraction.pointerId !== null) {
+    try {
+      endedInteraction.captureTarget?.releasePointerCapture?.(endedInteraction.pointerId);
+    } catch {
+      // Pointer capture may already be gone after blur/cancel.
+    }
+  }
+  activeInteraction = null;
+
+  if (endedInteraction.type === "resize") {
+    window.codexUsage.endResize();
+  } else {
+    window.codexUsage.endDrag();
+  }
+}
+
 function isInteractiveTarget(target) {
-  return Boolean(target.closest("button, input, label, output"));
+  return Boolean(target.closest("button, input, label, output, .resize-handle"));
 }
 
 function clamp(value, min, max) {

@@ -16,13 +16,31 @@ contextBridge.exposeInMainWorld("codexUsage", {
   quit() {
     return ipcRenderer.invoke("app:quit");
   },
-  moveBy(deltaX, deltaY) {
-    ipcRenderer.send("window:moveBy", deltaX, deltaY);
+  startDrag() {
+    ipcRenderer.send("window:drag-start");
+  },
+  dragMove() {
+    ipcRenderer.send("window:drag-move");
+  },
+  endDrag() {
+    ipcRenderer.send("window:drag-end");
+  },
+  startResize(direction) {
+    ipcRenderer.send("window:resize-start", direction);
+  },
+  resizeMove() {
+    ipcRenderer.send("window:resize-move");
+  },
+  endResize() {
+    ipcRenderer.send("window:resize-end");
   },
   readSettings() {
     return ipcRenderer.invoke("settings:read");
   },
   writeSettings(settings) {
     return ipcRenderer.invoke("settings:write", settings);
+  },
+  resetSettings() {
+    return ipcRenderer.invoke("settings:reset");
   }
 });

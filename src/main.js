@@ -1,12 +1,21 @@
-const { app, BrowserWindow, globalShortcut, ipcMain } = require("electron");
+const { app, BrowserWindow, globalShortcut, ipcMain, screen } = require("electron");
 const { execFileSync, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
 const REFRESH_MS = 60_000;
 const APP_NAME = "Codex Usage Widget";
+const DEFAULT_BOUNDS = {
+  width: 382,
+  height: 220
+};
+const MIN_BOUNDS = {
+  width: 300,
+  height: 160
+};
 const DEFAULT_SETTINGS = {
-  opacity: 0.95
+  opacity: 0.95,
+  windowBounds: null
 };
 
 let mainWindow = null;
@@ -14,6 +23,9 @@ let latestPayload = null;
 let refreshTimer = null;
 let rpcClient = null;
 let settings = DEFAULT_SETTINGS;
+let boundsSaveTimer = null;
+let dragSession = null;
+let resizeSession = null;
 
 class CodexRpcClient {
   constructor() {
@@ -216,12 +228,15 @@ function isShellScript(command) {
 
 function createWindow() {
   settings = loadSettings();
+  const windowBounds = normalizeWindowBounds(settings.windowBounds);
 
   mainWindow = new BrowserWindow({
-    width: 382,
-    height: 220,
-    minWidth: 230,
-    minHeight: 104,
+    width: windowBounds?.width ?? DEFAULT_BOUNDS.width,
+    height: windowBounds?.height ?? DEFAULT_BOUNDS.height,
+    x: windowBounds?.x,
+    y: windowBounds?.y,
+    minWidth: MIN_BOUNDS.width,
+    minHeight: MIN_BOUNDS.height,
     frame: false,
     transparent: true,
     resizable: false,
@@ -241,11 +256,15 @@ function createWindow() {
   mainWindow.setOpacity(settings.opacity);
   mainWindow.loadFile(path.join(__dirname, "index.html"));
   mainWindow.once("ready-to-show", () => {
-    positionWindow();
+    if (!windowBounds || !Number.isFinite(windowBounds.x) || !Number.isFinite(windowBounds.y)) {
+      positionWindow();
+    }
     mainWindow.showInactive();
     sendSettingsUpdate();
     refreshUsage();
   });
+  mainWindow.on("move", saveWindowBoundsSoon);
+  mainWindow.on("resize", saveWindowBoundsSoon);
 }
 
 function positionWindow() {
@@ -351,7 +370,7 @@ function loadSettings() {
 }
 
 function saveSettings(nextSettings) {
-  settings = normalizeSettings(nextSettings);
+  settings = normalizeSettings({ ...settings, ...nextSettings });
 
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setOpacity(settings.opacity);
@@ -372,7 +391,8 @@ function normalizeSettings(value) {
   return {
     ...DEFAULT_SETTINGS,
     ...(value || {}),
-    opacity: clamp(value?.opacity ?? DEFAULT_SETTINGS.opacity, 0.45, 1)
+    opacity: clamp(value?.opacity ?? DEFAULT_SETTINGS.opacity, 0.45, 1),
+    windowBounds: normalizeWindowBounds(value?.windowBounds)
   };
 }
 
@@ -380,10 +400,97 @@ function getSettingsPath() {
   return path.join(app.getPath("userData"), "settings.json");
 }
 
+function saveWindowBoundsSoon() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  if (boundsSaveTimer) {
+    clearTimeout(boundsSaveTimer);
+  }
+
+  boundsSaveTimer = setTimeout(() => {
+    boundsSaveTimer = null;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    saveSettings({ windowBounds: normalizeWindowBounds(mainWindow.getBounds()) });
+  }, 250);
+}
+
+function resetSettings() {
+  const nextSettings = {
+    ...settings,
+    opacity: DEFAULT_SETTINGS.opacity
+  };
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const currentBounds = mainWindow.getBounds();
+    const windowBounds = normalizeWindowBounds({
+      ...currentBounds,
+      width: DEFAULT_BOUNDS.width,
+      height: DEFAULT_BOUNDS.height
+    });
+
+    mainWindow.setOpacity(DEFAULT_SETTINGS.opacity);
+    mainWindow.setBounds(windowBounds, false);
+    nextSettings.windowBounds = normalizeWindowBounds(mainWindow.getBounds());
+  } else {
+    nextSettings.windowBounds = {
+      width: DEFAULT_BOUNDS.width,
+      height: DEFAULT_BOUNDS.height
+    };
+  }
+
+  return saveSettings(nextSettings);
+}
+
+function normalizeWindowBounds(value) {
+  if (!value || typeof value !== "object") return null;
+
+  const width = Math.round(clamp(value.width, MIN_BOUNDS.width, 1600));
+  const height = Math.round(clamp(value.height, MIN_BOUNDS.height, 1000));
+  const bounds = { width, height };
+
+  if (Number.isFinite(Number(value.x))) {
+    bounds.x = Math.round(Number(value.x));
+  }
+  if (Number.isFinite(Number(value.y))) {
+    bounds.y = Math.round(Number(value.y));
+  }
+
+  return bounds;
+}
+
 function sendSettingsUpdate() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("settings:update", settings);
   }
+}
+
+function getResizedBounds(startBounds, direction, deltaX, deltaY) {
+  const right = startBounds.x + startBounds.width;
+  const bottom = startBounds.y + startBounds.height;
+  const bounds = { ...startBounds };
+
+  if (direction.includes("e")) {
+    bounds.width = Math.max(MIN_BOUNDS.width, startBounds.width + deltaX);
+  }
+  if (direction.includes("s")) {
+    bounds.height = Math.max(MIN_BOUNDS.height, startBounds.height + deltaY);
+  }
+  if (direction.includes("w")) {
+    bounds.width = Math.max(MIN_BOUNDS.width, startBounds.width - deltaX);
+    bounds.x = right - bounds.width;
+  }
+  if (direction.includes("n")) {
+    bounds.height = Math.max(MIN_BOUNDS.height, startBounds.height - deltaY);
+    bounds.y = bottom - bounds.height;
+  }
+
+  return {
+    x: Math.round(bounds.x),
+    y: Math.round(bounds.y),
+    width: Math.round(bounds.width),
+    height: Math.round(bounds.height)
+  };
 }
 
 function clamp(value, min, max) {
@@ -417,11 +524,56 @@ ipcMain.handle("app:hide", () => {
 ipcMain.handle("app:quit", () => app.quit());
 ipcMain.handle("settings:read", () => settings);
 ipcMain.handle("settings:write", (_event, nextSettings) => saveSettings(nextSettings));
-ipcMain.on("window:moveBy", (_event, deltaX, deltaY) => {
+ipcMain.handle("settings:reset", () => resetSettings());
+ipcMain.on("window:drag-start", () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
-  const [x, y] = mainWindow.getPosition();
-  mainWindow.setPosition(x + Math.round(deltaX), y + Math.round(deltaY), false);
+  resizeSession = null;
+  dragSession = {
+    startMouse: screen.getCursorScreenPoint(),
+    startBounds: mainWindow.getBounds()
+  };
+});
+ipcMain.on("window:drag-move", () => {
+  if (!mainWindow || mainWindow.isDestroyed() || !dragSession) return;
+
+  const currentMouse = screen.getCursorScreenPoint();
+  mainWindow.setBounds(
+    {
+      x: dragSession.startBounds.x + currentMouse.x - dragSession.startMouse.x,
+      y: dragSession.startBounds.y + currentMouse.y - dragSession.startMouse.y,
+      width: dragSession.startBounds.width,
+      height: dragSession.startBounds.height
+    },
+    false
+  );
+});
+ipcMain.on("window:drag-end", () => {
+  dragSession = null;
+  saveWindowBoundsSoon();
+});
+ipcMain.on("window:resize-start", (_event, direction) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  dragSession = null;
+  resizeSession = {
+    direction,
+    startMouse: screen.getCursorScreenPoint(),
+    startBounds: mainWindow.getBounds()
+  };
+});
+ipcMain.on("window:resize-move", () => {
+  if (!mainWindow || mainWindow.isDestroyed() || !resizeSession) return;
+
+  const currentMouse = screen.getCursorScreenPoint();
+  const deltaX = currentMouse.x - resizeSession.startMouse.x;
+  const deltaY = currentMouse.y - resizeSession.startMouse.y;
+  const bounds = getResizedBounds(resizeSession.startBounds, resizeSession.direction, deltaX, deltaY);
+  mainWindow.setBounds(bounds, false);
+});
+ipcMain.on("window:resize-end", () => {
+  resizeSession = null;
+  saveWindowBoundsSoon();
 });
 
 app.on("before-quit", () => {
@@ -429,6 +581,12 @@ app.on("before-quit", () => {
     clearInterval(refreshTimer);
     refreshTimer = null;
   }
+  if (boundsSaveTimer) {
+    clearTimeout(boundsSaveTimer);
+    boundsSaveTimer = null;
+  }
+  dragSession = null;
+  resizeSession = null;
   globalShortcut.unregisterAll();
   if (rpcClient) {
     rpcClient.dispose();
