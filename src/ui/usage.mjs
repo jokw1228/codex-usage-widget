@@ -1,32 +1,42 @@
-function selectUsageLimits(data) {
-  if (!data) return null;
-
-  const byId = data.rateLimitsByLimitId || {};
-  const candidates = Object.entries(byId).map(([id, limits]) => ({ id, limits }));
-
-  if (data.rateLimits) {
-    candidates.push({ id: "rateLimits", limits: data.rateLimits });
+function listUsageLimits(data) {
+  const byId = new Map();
+  for (const [id, limits] of Object.entries(data?.rateLimitsByLimitId || {})) {
+    if (limits && typeof limits === "object") byId.set(id, { id, limits });
   }
 
-  if (candidates.length === 0) return null;
+  // The legacy snapshot can duplicate a named bucket; prefer the named snapshot.
+  const fallback = data?.rateLimits;
+  if (fallback && typeof fallback === "object") {
+    const id = fallback.limitId || "codex";
+    if (!byId.has(id)) byId.set(id, { id, limits: fallback });
+  }
 
-  return candidates
-    .filter((candidate) => candidate.limits)
-    .sort((a, b) => scoreUsageLimits(b) - scoreUsageLimits(a))[0] ?? null;
+  return [...byId.values()].sort((a, b) => {
+    if (a.id === "codex") return -1;
+    if (b.id === "codex") return 1;
+    return a.id.localeCompare(b.id);
+  });
 }
 
-function scoreUsageLimits(candidate) {
-  const limits = candidate.limits;
-  const windowCount = getUsageWindows(candidate).length;
-  let score = 0;
+function selectUsageLimits(data, selectedId = "codex") {
+  const candidates = listUsageLimits(data);
+  return candidates.find((candidate) => candidate.id === selectedId)
+    ?? candidates.find((candidate) => candidate.id === "codex")
+    ?? candidates[0]
+    ?? null;
+}
 
-  score += windowCount * 30;
-  if (windowCount >= 2) score += 40;
-  if (candidate.id !== "codex" && candidate.id !== "rateLimits") score += 10;
-  if (limits.primary?.windowDurationMins === 300) score += 10;
-  if (limits.secondary?.windowDurationMins === 10080) score += 10;
+function formatLimitLabel(candidate) {
+  if (candidate.id === "codex") return "기본";
+  return candidate.limits.limitName || candidate.id;
+}
 
-  return score;
+function getRemainingPercent(windowData) {
+  const used = windowData?.usedPercent;
+  if (used === null || used === undefined || used === "" || typeof used === "boolean") return null;
+  const value = Number(used);
+  if (!Number.isFinite(value)) return null;
+  return Math.round((100 - Math.min(100, Math.max(0, value))) * 10) / 10;
 }
 
 function getUsageWindows(candidate) {
@@ -42,6 +52,7 @@ function formatLimitSource(candidate) {
   const limits = candidate?.limits;
   if (!limits) return "사용량 정보 없음";
 
+  if (candidate.id === "codex") return "Codex 기본 한도";
   if (limits.limitName) return `${limits.limitName} 기준`;
   if (candidate.id && candidate.id !== "rateLimits") return `${candidate.id} 기준`;
   return "기본 한도 기준";
@@ -61,6 +72,7 @@ function formatReset(seconds) {
   if (!seconds) return "리셋 시간 없음";
 
   const date = new Date(seconds * 1000);
+  if (!Number.isFinite(date.getTime())) return "리셋 시간 없음";
   const today = new Date();
   const isToday = date.toDateString() === today.toDateString();
   const datePart = isToday
@@ -97,6 +109,7 @@ function shortenError(error) {
 
 
 export {
-  selectUsageLimits, getUsageWindows, formatLimitSource,
+  listUsageLimits, selectUsageLimits, formatLimitLabel, getRemainingPercent,
+  getUsageWindows, formatLimitSource,
   formatWindowDuration, formatReset, formatUpdated, shortenError
 };

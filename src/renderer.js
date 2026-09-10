@@ -1,5 +1,8 @@
 import {
+  listUsageLimits,
   selectUsageLimits,
+  formatLimitLabel,
+  getRemainingPercent,
   getUsageWindows,
   formatLimitSource,
   formatWindowDuration,
@@ -18,6 +21,9 @@ const meters = document.getElementById("meters");
 const errorPanel = document.getElementById("errorPanel");
 const errorDetail = document.getElementById("errorDetail");
 const limitSource = document.getElementById("limitSource");
+const limitTabs = document.getElementById("limitTabs");
+const usagePanel = document.getElementById("usagePanel");
+const emptyState = document.getElementById("emptyState");
 const primaryLabel = document.getElementById("primaryLabel");
 const secondaryLabel = document.getElementById("secondaryLabel");
 const primaryRemaining = document.getElementById("primaryRemaining");
@@ -49,6 +55,35 @@ const meterSlots = [
   }
 ];
 let activeInteraction = null;
+let currentData = null;
+let selectedLimitId = "codex";
+let tabSignature = "";
+
+limitTabs.addEventListener("click", (event) => {
+  const tab = event.target.closest("[role=tab]");
+  if (tab) selectLimit(tab.dataset.limitId);
+});
+
+limitTabs.addEventListener("keydown", (event) => {
+  const tabs = [...limitTabs.querySelectorAll("[role=tab]")];
+  const index = tabs.indexOf(document.activeElement);
+  if (index < 0) return;
+  let next;
+  if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+  else if (event.key === "ArrowLeft") next = (index + tabs.length - 1) % tabs.length;
+  else if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = tabs.length - 1;
+  else return;
+  event.preventDefault();
+  selectLimit(tabs[next].dataset.limitId);
+  tabs[next].focus();
+});
+
+function selectLimit(id) {
+  selectedLimitId = id;
+  renderUsage();
+  usagePanel.scrollTop = 0;
+}
 
 refreshButton.addEventListener("click", () => {
   window.codexUsage.refresh();
@@ -91,7 +126,7 @@ for (const handle of resizeHandles) {
 }
 
 window.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0 || isInteractiveTarget(event.target)) return;
+  if (event.button !== 0 || isInteractiveTarget(event.target) || isScrollbarTarget(event)) return;
 
   event.preventDefault();
   startPointerInteraction(event, "drag");
@@ -133,12 +168,13 @@ window.codexUsage.onUpdate((payload) => {
   if (!payload) return;
 
   widget.dataset.status = payload.status;
-  updatedEl.textContent = formatUpdated(payload.updatedAt, payload.source);
 
   if (payload.status === "loading") {
     statusEl.textContent = "갱신 중";
-    limitSource.textContent = "한도 확인 중";
-    showMeters();
+    if (!currentData) {
+      limitSource.textContent = "한도 확인 중";
+      renderWindows([]);
+    }
     return;
   }
 
@@ -148,16 +184,60 @@ window.codexUsage.onUpdate((payload) => {
     return;
   }
 
-  const selectedLimits = selectUsageLimits(payload.data);
+  currentData = payload.data;
+  updatedEl.textContent = formatUpdated(payload.updatedAt, payload.source);
+  renderUsage();
+});
+
+function renderUsage() {
+  const candidates = listUsageLimits(currentData);
+  const selectedLimits = selectUsageLimits(currentData, selectedLimitId);
+  selectedLimitId = selectedLimits?.id ?? "codex";
+  renderLimitTabs(candidates);
   const windows = getUsageWindows(selectedLimits);
 
   renderWindows(windows);
   limitSource.textContent = formatLimitSource(selectedLimits);
-  statusEl.textContent = selectedLimits?.limits?.planType
-    ? selectedLimits.limits.planType.toUpperCase()
-    : "READY";
+  limitSource.title = limitSource.textContent;
+  const planType = currentData?.rateLimits?.planType
+    ?? currentData?.rateLimitsByLimitId?.codex?.planType
+    ?? selectedLimits?.limits?.planType;
+  statusEl.textContent = planType ? String(planType).toUpperCase() : "READY";
+  emptyState.hidden = windows.length > 0;
+  emptyState.textContent = selectedLimits
+    ? "이 한도의 기간별 사용량 정보가 제공되지 않았습니다."
+    : "조회 가능한 사용량 한도가 없습니다.";
   showMeters();
-});
+}
+
+function renderLimitTabs(candidates) {
+  const signature = JSON.stringify(candidates.map((candidate) => [candidate.id, formatLimitLabel(candidate)]));
+  if (signature !== tabSignature) {
+    const tabs = candidates.map((candidate, index) => {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "limit-tab";
+      tab.id = `limit-tab-${index}`;
+      tab.dataset.limitId = candidate.id;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", "usagePanel");
+      tab.textContent = formatLimitLabel(candidate);
+      tab.title = formatLimitSource(candidate);
+      return tab;
+    });
+    limitTabs.replaceChildren(...tabs);
+    tabSignature = signature;
+  }
+  limitTabs.hidden = candidates.length < 2;
+  usagePanel.setAttribute("role", candidates.length > 1 ? "tabpanel" : "region");
+  usagePanel.removeAttribute("aria-labelledby");
+  for (const tab of limitTabs.children) {
+    const selected = tab.dataset.limitId === selectedLimitId;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    if (selected && !limitTabs.hidden) usagePanel.setAttribute("aria-labelledby", tab.id);
+  }
+}
 
 function showMeters() {
   meters.hidden = false;
@@ -167,6 +247,8 @@ function showMeters() {
 function showError(error) {
   meters.hidden = true;
   errorPanel.hidden = false;
+  emptyState.hidden = true;
+  limitTabs.hidden = true;
   limitSource.textContent = "Codex 연결 필요";
   errorDetail.textContent = error ? `세부 오류: ${shortenError(error)}` : "";
 }
@@ -188,15 +270,14 @@ function renderWindows(windows) {
 function renderWindow(windowData, slot) {
   slot.label.textContent = formatWindowDuration(windowData.windowDurationMins);
 
-  if (!Number.isFinite(Number(windowData.usedPercent))) {
+  const remaining = getRemainingPercent(windowData);
+  if (remaining === null) {
     slot.remaining.textContent = "--%";
     slot.bar.style.width = "0%";
     slot.reset.textContent = "사용량 정보 없음";
     return;
   }
 
-  const used = clamp(windowData.usedPercent, 0, 100);
-  const remaining = 100 - used;
   slot.remaining.textContent = `${remaining}%`;
   slot.bar.style.width = `${remaining}%`;
   slot.reset.textContent = formatReset(windowData.resetsAt);
@@ -271,7 +352,14 @@ function endPointerInteraction(event) {
 }
 
 function isInteractiveTarget(target) {
-  return Boolean(target.closest("button, input, label, output, .resize-handle"));
+  return Boolean(target.closest("button, input, label, output, .limit-tabs, .resize-handle"));
+}
+
+function isScrollbarTarget(event) {
+  const target = event.target;
+  if (!target.matches(".usage-panel, .card-back")) return false;
+  const contentRight = target.getBoundingClientRect().left + target.clientLeft + target.clientWidth;
+  return target.scrollHeight > target.clientHeight && event.clientX >= contentRight;
 }
 
 function clamp(value, min, max) {

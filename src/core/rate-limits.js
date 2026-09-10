@@ -2,14 +2,24 @@ function mergeRateLimitPayload(previous, update) {
   if (!previous) return update;
   if (!update) return previous;
 
+  let byId = { ...previous.rateLimitsByLimitId };
+  if (previous.rateLimits) {
+    const id = previous.rateLimits.limitId || "codex";
+    if (!Object.prototype.hasOwnProperty.call(byId, id)) byId[id] = previous.rateLimits;
+  }
+  // A single-limit event must also update the named bucket used by the tabs.
+  if (update.rateLimits) {
+    const id = update.rateLimits.limitId || "codex";
+    byId[id] = mergeRateLimitSnapshot(byId[id], update.rateLimits);
+  }
+  byId = mergeRateLimitsById(byId, update.rateLimitsByLimitId);
+  const legacy = update.rateLimits === undefined ? previous.rateLimits : update.rateLimits;
+
   return {
     ...previous,
     ...update,
-    rateLimits: mergeRateLimitSnapshot(previous.rateLimits, update.rateLimits),
-    rateLimitsByLimitId: mergeRateLimitsById(
-      previous.rateLimitsByLimitId,
-      update.rateLimitsByLimitId
-    )
+    rateLimits: legacy ? byId[legacy.limitId || "codex"] : legacy,
+    rateLimitsByLimitId: byId
   };
 }
 
@@ -25,19 +35,17 @@ function mergeRateLimitsById(previous, update) {
 }
 
 function mergeRateLimitSnapshot(previous, update) {
+  if (update === undefined) return previous;
+  if (update === null) return null;
   if (!previous) return update;
-  if (!update) return previous;
 
-  return {
-    ...previous,
-    ...update,
-    primary: update.primary ? { ...previous.primary, ...update.primary } : previous.primary,
-    secondary: update.secondary ? { ...previous.secondary, ...update.secondary } : previous.secondary,
-    credits: update.credits ? { ...previous.credits, ...update.credits } : previous.credits,
-    individualLimit: update.individualLimit
-      ? { ...previous.individualLimit, ...update.individualLimit }
-      : previous.individualLimit
-  };
+  const merged = { ...previous, ...update };
+  for (const key of ["primary", "secondary", "credits", "individualLimit"]) {
+    if (update[key] && typeof update[key] === "object") {
+      merged[key] = { ...previous[key], ...update[key] };
+    }
+  }
+  return merged;
 }
 
 

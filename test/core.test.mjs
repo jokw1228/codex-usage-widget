@@ -6,7 +6,10 @@ import path from "node:path";
 import { getResizedBounds, normalizeWindowBounds } from "../src/core/window-bounds.js";
 import { createSettingsStore, DEFAULT_SETTINGS } from "../src/core/settings-store.js";
 import { mergeRateLimitPayload } from "../src/core/rate-limits.js";
-import { selectUsageLimits, getUsageWindows, formatWindowDuration } from "../src/ui/usage.mjs";
+import {
+  listUsageLimits, selectUsageLimits, getUsageWindows, getRemainingPercent,
+  formatWindowDuration, formatLimitSource, formatLimitLabel
+} from "../src/ui/usage.mjs";
 
 test("resize keeps the opposite edge anchored and respects minimum dimensions", () => {
   const start = { x: 100, y: 200, width: 382, height: 220 };
@@ -69,17 +72,103 @@ test("single weekly and two-window responses retain their duration labels", () =
   assert.deepEqual(getUsageWindows(null), []);
 });
 
-test("existing model-specific selection remains stable", () => {
-  const codex = { primary: { windowDurationMins: 10080 }, secondary: null };
+test("the default weekly allowance is selected even when Spark has two unused windows", () => {
+  const codex = { primary: { usedPercent: 5, windowDurationMins: 10080 }, secondary: null };
   const model = {
-    limitName: "Model-specific limit",
-    primary: { windowDurationMins: 300 },
-    secondary: { windowDurationMins: 10080 }
+    limitName: "GPT-5.3-Codex-Spark",
+    primary: { usedPercent: 0, windowDurationMins: 300 },
+    secondary: { usedPercent: 0, windowDurationMins: 10080 }
   };
-  assert.deepEqual(selectUsageLimits({
+  const selected = selectUsageLimits({
     rateLimits: codex,
-    rateLimitsByLimitId: { codex, model }
-  }), { id: "model", limits: model });
+    rateLimitsByLimitId: { codex, codex_bengalfox: model }
+  });
+  assert.deepEqual(selected, { id: "codex", limits: codex });
+  assert.equal(100 - getUsageWindows(selected)[0].usedPercent, 95);
+  assert.equal(getUsageWindows(selected).length, 1);
+  assert.equal(formatLimitSource(selected), "Codex 기본 한도");
+});
+
+test("legacy limits keep their identity even when only a separate limit is available", () => {
+  const fallback = { primary: { usedPercent: 12, windowDurationMins: 300 } };
+  assert.deepEqual(selectUsageLimits({ rateLimits: fallback }), { id: "codex", limits: fallback });
+  const spark = { limitId: "codex_bengalfox", ...fallback };
+  assert.deepEqual(selectUsageLimits({
+    rateLimits: spark,
+    rateLimitsByLimitId: { codex_bengalfox: spark }
+  }), { id: "codex_bengalfox", limits: spark });
+});
+
+test("tabs list every named limit once, with the default first", () => {
+  const data = {
+    rateLimits: { limitId: "codex", primary: { usedPercent: 0 } },
+    rateLimitsByLimitId: {
+      future: { limitName: "Another limit" },
+      codex_bengalfox: { limitName: "GPT-5.3-Codex-Spark" },
+      codex: { primary: { usedPercent: 5 } },
+      unavailable: null
+    }
+  };
+  assert.deepEqual(listUsageLimits(data).map(({ id }) => id), ["codex", "codex_bengalfox", "future"]);
+  assert.equal(listUsageLimits(data)[0].limits.primary.usedPercent, 5);
+  assert.equal(formatLimitLabel(listUsageLimits(data)[0]), "기본");
+  assert.equal(formatLimitLabel(listUsageLimits(data)[1]), "GPT-5.3-Codex-Spark");
+  assert.equal(selectUsageLimits(data, "future").id, "future");
+  assert.equal(selectUsageLimits(data, "removed").id, "codex");
+  assert.deepEqual(listUsageLimits(null), []);
+});
+
+test("unknown usage is not rendered as 100 percent remaining", () => {
+  for (const usedPercent of [null, undefined, "", false, "invalid", NaN]) {
+    assert.equal(getRemainingPercent({ usedPercent }), null);
+  }
+  assert.equal(getRemainingPercent({ usedPercent: 0 }), 100);
+  assert.equal(getRemainingPercent({ usedPercent: 5 }), 95);
+  assert.equal(getRemainingPercent({ usedPercent: 25.25 }), 74.8);
+  assert.equal(getRemainingPercent({ usedPercent: 101 }), 0);
+});
+
+test("single-limit events update only the corresponding tab", () => {
+  const previous = {
+    rateLimits: { limitId: "codex", primary: { usedPercent: 5, windowDurationMins: 10080 } },
+    rateLimitsByLimitId: {
+      codex: { primary: { usedPercent: 5, windowDurationMins: 10080 } },
+      spark: { limitId: "spark", primary: { usedPercent: 0, windowDurationMins: 300 } }
+    }
+  };
+  const first = mergeRateLimitPayload(previous, {
+    rateLimits: { limitId: "codex", primary: { usedPercent: 6 } }
+  });
+  assert.equal(selectUsageLimits(first).limits.primary.usedPercent, 6);
+  const second = mergeRateLimitPayload(first, {
+    rateLimits: { limitId: "spark", primary: { usedPercent: 10 } }
+  });
+  assert.equal(selectUsageLimits(second).limits.primary.usedPercent, 6);
+  assert.equal(selectUsageLimits(second, "spark").limits.primary.usedPercent, 10);
+  assert.equal(selectUsageLimits(second, "spark").limits.primary.windowDurationMins, 300);
+  assert.equal(previous.rateLimitsByLimitId.codex.primary.usedPercent, 5);
+});
+
+test("explicit null removes an obsolete window or limit instead of restoring old data", () => {
+  const previous = {
+    rateLimitsByLimitId: {
+      codex: { primary: { usedPercent: 5 }, secondary: { usedPercent: 10 } },
+      spark: { primary: { usedPercent: 0 } }
+    }
+  };
+  const merged = mergeRateLimitPayload(previous, {
+    rateLimitsByLimitId: { codex: { secondary: null }, spark: null }
+  });
+  assert.equal(getUsageWindows(selectUsageLimits(merged)).length, 1);
+  assert.deepEqual(listUsageLimits(merged).map(({ id }) => id), ["codex"]);
+});
+
+test("the named Codex bucket takes precedence over the legacy snapshot", () => {
+  const codex = { primary: { usedPercent: 5, windowDurationMins: 10080 } };
+  assert.deepEqual(selectUsageLimits({
+    rateLimits: { primary: { usedPercent: 0 } },
+    rateLimitsByLimitId: { codex }
+  }), { id: "codex", limits: codex });
 });
 
 test("partial usage events preserve other limits without mutating the snapshot", () => {

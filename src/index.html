@@ -17,7 +17,6 @@
                 <span id="status" class="status-pill">연결 중</span>
               </div>
               <h1>남은 사용량</h1>
-              <p id="limitSource" class="limit-source">한도 확인 중</p>
             </div>
             <div class="actions">
               <span id="updated" class="updated-time">--:--</span>
@@ -27,35 +26,41 @@
             </div>
           </header>
 
-          <section id="errorPanel" class="error-panel" aria-live="polite" hidden>
-            <strong>Codex 연결 필요</strong>
-            <p>Codex Desktop 또는 Codex CLI를 설치하고 ChatGPT 계정으로 로그인해 주세요.</p>
-            <small id="errorDetail"></small>
-          </section>
+          <nav id="limitTabs" class="limit-tabs" role="tablist" aria-label="사용량 한도" hidden></nav>
 
-          <section id="meters" class="meters" aria-live="polite">
-            <article class="meter" data-tone="primary">
-              <div class="meter-top">
-                <span id="primaryLabel">5시간</span>
-                <strong id="primaryRemaining">--%</strong>
-              </div>
-              <div class="track">
-                <div id="primaryBar" class="bar"></div>
-              </div>
-              <time id="primaryReset">리셋 확인 중</time>
-            </article>
+          <div id="usagePanel" class="usage-panel" role="region" aria-label="선택한 한도" tabindex="0">
+            <p id="limitSource" class="limit-source">한도 확인 중</p>
+            <p id="emptyState" class="empty-state" role="status" hidden></p>
+            <section id="errorPanel" class="error-panel" aria-live="polite" hidden>
+              <strong>Codex 연결 필요</strong>
+              <p>Codex Desktop 또는 Codex CLI를 설치하고 ChatGPT 계정으로 로그인해 주세요.</p>
+              <small id="errorDetail"></small>
+            </section>
 
-            <article class="meter" data-tone="secondary">
-              <div class="meter-top">
-                <span id="secondaryLabel">1주</span>
-                <strong id="secondaryRemaining">--%</strong>
-              </div>
-              <div class="track">
-                <div id="secondaryBar" class="bar"></div>
-              </div>
-              <time id="secondaryReset">리셋 확인 중</time>
-            </article>
-          </section>
+            <section id="meters" class="meters" aria-live="polite">
+              <article class="meter" data-tone="primary" hidden>
+                <div class="meter-top">
+                  <span id="primaryLabel">5시간</span>
+                  <strong id="primaryRemaining">--%</strong>
+                </div>
+                <div class="track">
+                  <div id="primaryBar" class="bar"></div>
+                </div>
+                <time id="primaryReset">리셋 확인 중</time>
+              </article>
+
+              <article class="meter" data-tone="secondary" hidden>
+                <div class="meter-top">
+                  <span id="secondaryLabel">1주</span>
+                  <strong id="secondaryRemaining">--%</strong>
+                </div>
+                <div class="track">
+                  <div id="secondaryBar" class="bar"></div>
+                </div>
+                <time id="secondaryReset">리셋 확인 중</time>
+              </article>
+            </section>
+          </div>
         </section>
 
         <section class="card-face card-back" aria-label="옵션">
