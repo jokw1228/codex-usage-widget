@@ -1,6 +1,6 @@
 {
   "name": "codex-usage-widget",
-  "version": "0.1.10",
+  "version": "0.1.13",
   "private": true,
   "description": "Always-on-top Codex usage widget for Windows.",
   "author": "Kangwoo Cho",
@@ -9,7 +9,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check scripts/create-icon.js",
+    "check": "node scripts/check.js",
+    "test": "node --test",
     "icon:build": "electron scripts/create-icon.js",
     "package:win": "node scripts/clean-release.js before && npm run icon:build && electron-builder --win portable --x64 && node scripts/clean-release.js after"
   },

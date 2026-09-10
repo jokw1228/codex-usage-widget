@@ -17,6 +17,7 @@
                 <span id="status" class="status-pill">연결 중</span>
               </div>
               <h1>남은 사용량</h1>
+              <p id="limitSource" class="limit-source">한도 확인 중</p>
             </div>
             <div class="actions">
               <span id="updated" class="updated-time">--:--</span>
@@ -35,7 +36,7 @@
           <section id="meters" class="meters" aria-live="polite">
             <article class="meter" data-tone="primary">
               <div class="meter-top">
-                <span>5시간</span>
+                <span id="primaryLabel">5시간</span>
                 <strong id="primaryRemaining">--%</strong>
               </div>
               <div class="track">
@@ -46,7 +47,7 @@
 
             <article class="meter" data-tone="secondary">
               <div class="meter-top">
-                <span>1주</span>
+                <span id="secondaryLabel">1주</span>
                 <strong id="secondaryRemaining">--%</strong>
               </div>
               <div class="track">
@@ -91,6 +92,6 @@
       <div class="resize-handle resize-nw" data-resize="nw"></div>
     </main>
 
-    <script src="./renderer.js"></script>
+    <script type="module" src="./renderer.js"></script>
   </body>
 </html>

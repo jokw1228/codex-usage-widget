@@ -1,233 +1,26 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, screen } = require("electron");
-const { execFileSync, spawn } = require("child_process");
-const fs = require("fs");
 const path = require("path");
+const { CodexRpcClient } = require("./core/codex-client");
+const { DEFAULT_BOUNDS, MIN_BOUNDS, normalizeWindowBounds, getResizedBounds } = require("./core/window-bounds");
+const { DEFAULT_SETTINGS, createSettingsStore } = require("./core/settings-store");
+const { mergeRateLimitPayload } = require("./core/rate-limits");
 
 const REFRESH_MS = 60_000;
 const APP_NAME = "Codex Usage Widget";
-const DEFAULT_BOUNDS = {
-  width: 382,
-  height: 220
-};
-const MIN_BOUNDS = {
-  width: 300,
-  height: 160
-};
-const DEFAULT_SETTINGS = {
-  opacity: 0.95,
-  windowBounds: null
-};
-
 let mainWindow = null;
 let latestPayload = null;
 let refreshTimer = null;
 let rpcClient = null;
-let settings = DEFAULT_SETTINGS;
+let refreshInFlight = null;
+let settings = { ...DEFAULT_SETTINGS };
+let settingsStore = null;
 let boundsSaveTimer = null;
 let dragSession = null;
 let resizeSession = null;
 
-class CodexRpcClient {
-  constructor() {
-    this.nextId = 1;
-    this.pending = new Map();
-    this.buffer = "";
-    this.ready = false;
-    const codexCommand = resolveCodexCommand();
-    this.child = spawn(codexCommand, ["app-server", "--stdio"], {
-      stdio: ["pipe", "pipe", "pipe"],
-      shell: isShellScript(codexCommand),
-      windowsHide: true
-    });
-
-    this.child.stdout.setEncoding("utf8");
-    this.child.stderr.setEncoding("utf8");
-    this.child.stdout.on("data", (chunk) => this.onStdout(chunk));
-    this.child.stderr.on("data", (chunk) => this.onStderr(chunk));
-    this.child.on("exit", () => this.onExit());
-  }
-
-  async initialize() {
-    if (this.ready) return;
-
-    await this.request("initialize", {
-      clientInfo: {
-        name: "codex-usage-widget",
-        title: "Codex Usage Widget",
-        version: app.getVersion()
-      },
-      capabilities: {
-        experimentalApi: true,
-        optOutNotificationMethods: []
-      }
-    });
-
-    this.ready = true;
-  }
-
-  async getRateLimits() {
-    await this.initialize();
-    return this.request("account/rateLimits/read", null);
-  }
-
-  request(method, params) {
-    const id = this.nextId++;
-    const message = { id, method, params };
-
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-
-      try {
-        this.child.stdin.write(`${JSON.stringify(message)}\n`);
-      } catch (error) {
-        this.pending.delete(id);
-        reject(error);
-      }
-
-      setTimeout(() => {
-        if (!this.pending.has(id)) return;
-        this.pending.delete(id);
-        reject(new Error(`${method} timed out`));
-      }, 12_000);
-    });
-  }
-
-  onStdout(chunk) {
-    this.buffer += chunk;
-
-    while (true) {
-      const newlineIndex = this.buffer.indexOf("\n");
-      if (newlineIndex === -1) break;
-
-      const line = this.buffer.slice(0, newlineIndex).trim();
-      this.buffer = this.buffer.slice(newlineIndex + 1);
-      if (!line) continue;
-
-      let message;
-      try {
-        message = JSON.parse(line);
-      } catch {
-        continue;
-      }
-
-      if (!Object.prototype.hasOwnProperty.call(message, "id")) {
-        this.onNotification(message);
-        continue;
-      }
-
-      const pending = this.pending.get(message.id);
-      if (!pending) continue;
-
-      this.pending.delete(message.id);
-      if (message.error) {
-        pending.reject(new Error(message.error.message || "Codex app-server error"));
-      } else {
-        pending.resolve(message.result);
-      }
-    }
-  }
-
-  onStderr(chunk) {
-    const text = chunk.trim();
-    if (text) {
-      latestPayload = {
-        status: "error",
-        error: text,
-        updatedAt: Date.now()
-      };
-      sendUsageUpdate();
-    }
-  }
-
-  onNotification(message) {
-    if (message.method !== "account/rateLimits/updated") return;
-
-    latestPayload = {
-      status: "ready",
-      data: mergeRateLimitPayload(latestPayload?.data, message.params),
-      source: "event",
-      updatedAt: Date.now()
-    };
-    sendUsageUpdate();
-  }
-
-  onExit() {
-    for (const pending of this.pending.values()) {
-      pending.reject(new Error("Codex app-server exited"));
-    }
-    this.pending.clear();
-    this.ready = false;
-    if (rpcClient === this) {
-      rpcClient = null;
-    }
-  }
-
-  dispose() {
-    for (const pending of this.pending.values()) {
-      pending.reject(new Error("Codex app-server stopped"));
-    }
-    this.pending.clear();
-
-    if (this.child && !this.child.killed) {
-      this.child.kill();
-    }
-  }
-}
-
-function resolveCodexCommand() {
-  const explicitPath = process.env.CODEX_CLI_PATH;
-  if (explicitPath && fs.existsSync(explicitPath)) {
-    return explicitPath;
-  }
-
-  const candidates = [];
-
-  try {
-    const output = execFileSync("where.exe", ["codex"], {
-      encoding: "utf8",
-      windowsHide: true
-    });
-    candidates.push(...output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
-  } catch {
-    // Fall through to common install paths.
-  }
-
-  const home = process.env.USERPROFILE;
-  if (home) {
-    candidates.push(path.join(home, "bin", "codex.exe"));
-    candidates.push(path.join(home, "bin", "codex.cmd"));
-  }
-
-  const localAppData = process.env.LOCALAPPDATA;
-  const codexBinRoot = localAppData && path.join(localAppData, "OpenAI", "Codex", "bin");
-  if (codexBinRoot && fs.existsSync(codexBinRoot)) {
-    for (const entry of fs.readdirSync(codexBinRoot)) {
-      candidates.push(path.join(codexBinRoot, entry, "codex.exe"));
-    }
-  }
-
-  const existing = candidates.filter((candidate) => {
-    try {
-      return fs.existsSync(candidate);
-    } catch {
-      return false;
-    }
-  });
-
-  const exe = existing.find((candidate) => candidate.toLowerCase().endsWith(".exe"));
-  if (exe) return exe;
-
-  if (existing[0]) return existing[0];
-
-  throw new Error("Codex CLI를 찾을 수 없습니다.");
-}
-
-function isShellScript(command) {
-  return /\.(cmd|bat)$/i.test(command);
-}
-
 function createWindow() {
-  settings = loadSettings();
+  settingsStore = createSettingsStore(path.join(app.getPath("userData"), "settings.json"));
+  settings = settingsStore.load();
   const windowBounds = normalizeWindowBounds(settings.windowBounds);
 
   mainWindow = new BrowserWindow({
@@ -271,7 +64,39 @@ function positionWindow() {
   mainWindow.setPosition(24, 24, false);
 }
 
-async function refreshUsage(source = "poll") {
+function refreshUsage(source = "poll") {
+  if (!refreshInFlight) {
+    refreshInFlight = readUsage(source).finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+function createRpcClient() {
+  const client = new CodexRpcClient({ version: app.getVersion() });
+  client.on("diagnostic", (error) => {
+    if (rpcClient !== client) return;
+    latestPayload = { status: "error", error, updatedAt: Date.now() };
+    sendUsageUpdate();
+  });
+  client.on("rate-limits", (update) => {
+    if (rpcClient !== client) return;
+    latestPayload = {
+      status: "ready",
+      data: mergeRateLimitPayload(latestPayload?.data, update),
+      source: "event",
+      updatedAt: Date.now()
+    };
+    sendUsageUpdate();
+  });
+  client.on("close", () => {
+    if (rpcClient === client) rpcClient = null;
+  });
+  return client;
+}
+
+async function readUsage(source) {
   latestPayload = {
     status: "loading",
     data: latestPayload && latestPayload.data ? latestPayload.data : null,
@@ -280,11 +105,11 @@ async function refreshUsage(source = "poll") {
   };
   sendUsageUpdate();
 
+  let client;
   try {
-    if (!rpcClient) {
-      rpcClient = new CodexRpcClient();
-    }
-    const data = await rpcClient.getRateLimits();
+    if (!rpcClient) rpcClient = createRpcClient();
+    client = rpcClient;
+    const data = await client.getRateLimits();
     latestPayload = {
       status: "ready",
       data,
@@ -292,10 +117,8 @@ async function refreshUsage(source = "poll") {
       updatedAt: Date.now()
     };
   } catch (error) {
-    if (rpcClient) {
-      rpcClient.dispose();
-      rpcClient = null;
-    }
+    client?.dispose();
+    if (rpcClient === client) rpcClient = null;
     latestPayload = {
       status: "error",
       error: error.message,
@@ -307,97 +130,21 @@ async function refreshUsage(source = "poll") {
   sendUsageUpdate();
 }
 
-function mergeRateLimitPayload(previous, update) {
-  if (!previous) return update;
-  if (!update) return previous;
-
-  return {
-    ...previous,
-    ...update,
-    rateLimits: mergeRateLimitSnapshot(previous.rateLimits, update.rateLimits),
-    rateLimitsByLimitId: mergeRateLimitsById(
-      previous.rateLimitsByLimitId,
-      update.rateLimitsByLimitId
-    )
-  };
-}
-
-function mergeRateLimitsById(previous, update) {
-  if (!previous) return update;
-  if (!update) return previous;
-
-  const merged = { ...previous };
-  for (const [limitId, snapshot] of Object.entries(update)) {
-    merged[limitId] = mergeRateLimitSnapshot(previous[limitId], snapshot);
-  }
-  return merged;
-}
-
-function mergeRateLimitSnapshot(previous, update) {
-  if (!previous) return update;
-  if (!update) return previous;
-
-  return {
-    ...previous,
-    ...update,
-    primary: update.primary ? { ...previous.primary, ...update.primary } : previous.primary,
-    secondary: update.secondary ? { ...previous.secondary, ...update.secondary } : previous.secondary,
-    credits: update.credits ? { ...previous.credits, ...update.credits } : previous.credits,
-    individualLimit: update.individualLimit
-      ? { ...previous.individualLimit, ...update.individualLimit }
-      : previous.individualLimit
-  };
-}
-
 function sendUsageUpdate() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("usage:update", latestPayload);
   }
 }
 
-function loadSettings() {
-  const settingsPath = getSettingsPath();
-
-  try {
-    if (!fs.existsSync(settingsPath)) {
-      return { ...DEFAULT_SETTINGS };
-    }
-
-    return normalizeSettings(JSON.parse(fs.readFileSync(settingsPath, "utf8")));
-  } catch {
-    return { ...DEFAULT_SETTINGS };
-  }
-}
-
 function saveSettings(nextSettings) {
-  settings = normalizeSettings({ ...settings, ...nextSettings });
+  settings = settingsStore.save({ ...settings, ...nextSettings });
 
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setOpacity(settings.opacity);
   }
 
-  try {
-    fs.mkdirSync(path.dirname(getSettingsPath()), { recursive: true });
-    fs.writeFileSync(getSettingsPath(), `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-  } catch {
-    // Settings are non-critical; keep the live value even if persistence fails.
-  }
-
   sendSettingsUpdate();
   return settings;
-}
-
-function normalizeSettings(value) {
-  return {
-    ...DEFAULT_SETTINGS,
-    ...(value || {}),
-    opacity: clamp(value?.opacity ?? DEFAULT_SETTINGS.opacity, 0.45, 1),
-    windowBounds: normalizeWindowBounds(value?.windowBounds)
-  };
-}
-
-function getSettingsPath() {
-  return path.join(app.getPath("userData"), "settings.json");
 }
 
 function saveWindowBoundsSoon() {
@@ -442,61 +189,10 @@ function resetSettings() {
   return saveSettings(nextSettings);
 }
 
-function normalizeWindowBounds(value) {
-  if (!value || typeof value !== "object") return null;
-
-  const width = Math.round(clamp(value.width, MIN_BOUNDS.width, 1600));
-  const height = Math.round(clamp(value.height, MIN_BOUNDS.height, 1000));
-  const bounds = { width, height };
-
-  if (Number.isFinite(Number(value.x))) {
-    bounds.x = Math.round(Number(value.x));
-  }
-  if (Number.isFinite(Number(value.y))) {
-    bounds.y = Math.round(Number(value.y));
-  }
-
-  return bounds;
-}
-
 function sendSettingsUpdate() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("settings:update", settings);
   }
-}
-
-function getResizedBounds(startBounds, direction, deltaX, deltaY) {
-  const right = startBounds.x + startBounds.width;
-  const bottom = startBounds.y + startBounds.height;
-  const bounds = { ...startBounds };
-
-  if (direction.includes("e")) {
-    bounds.width = Math.max(MIN_BOUNDS.width, startBounds.width + deltaX);
-  }
-  if (direction.includes("s")) {
-    bounds.height = Math.max(MIN_BOUNDS.height, startBounds.height + deltaY);
-  }
-  if (direction.includes("w")) {
-    bounds.width = Math.max(MIN_BOUNDS.width, startBounds.width - deltaX);
-    bounds.x = right - bounds.width;
-  }
-  if (direction.includes("n")) {
-    bounds.height = Math.max(MIN_BOUNDS.height, startBounds.height - deltaY);
-    bounds.y = bottom - bounds.height;
-  }
-
-  return {
-    x: Math.round(bounds.x),
-    y: Math.round(bounds.y),
-    width: Math.round(bounds.width),
-    height: Math.round(bounds.height)
-  };
-}
-
-function clamp(value, min, max) {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) return min;
-  return Math.min(max, Math.max(min, numericValue));
 }
 
 app.setName(APP_NAME);

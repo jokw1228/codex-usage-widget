@@ -7,7 +7,8 @@ Codex 사용량을 Windows 화면 위에 작게 띄워두는 투명/항상 위 �
 
 ## 무엇을 하나요?
 
-- Codex 5시간 사용량과 주간 사용량의 남은 비율을 표시합니다.
+- Codex가 내려주는 사용량 창을 계정/모델별 한도에 맞춰 표시합니다.
+- Plus/Pro처럼 5시간 창과 주간 창이 함께 내려오면 둘 다 보여주고, 한 창만 있으면 불필요한 빈 줄은 숨깁니다.
 - 프레임 없는 작은 위젯으로 화면 위에 계속 띄울 수 있습니다.
 - Codex가 설치되어 있지 않거나 로그인되어 있지 않으면 설치/로그인 안내를 보여줍니다.
 - 1분마다 자동 갱신하고, Codex 로컬 app-server 이벤트가 오면 즉시 반영합니다.
@@ -73,6 +74,7 @@ npm start
 
 ```powershell
 npm run check
+npm test
 npm audit --omit=optional
 ```
 
@@ -85,6 +87,8 @@ npm run package:win
 빌드 전에 `assets/app-icon.png`에서 Windows용 `assets/app-icon.ico`를 생성합니다.
 
 빌드 결과는 `release/` 폴더에 생성됩니다. 패키징 스크립트는 중간 산출물을 정리하고 portable exe만 남깁니다. 이 폴더는 Git에 커밋하지 않고, 배포 파일은 GitHub Releases에 업로드합니다.
+
+코드는 `src/`, 자동 검사는 `test/`, 빌드 도구는 `scripts/`, 프로젝트 문서는 `docs/`에서 관리합니다. 내부 구성과 데이터 흐름은 [아키텍처 문서](docs/02-아키텍처.md)에 정리했습니다.
 
 ## 라이선스
 
